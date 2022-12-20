@@ -21,46 +21,42 @@ bool World::in_range(const Point& p) const {
 	return !(p[0] < origin[0] || p[0] > extent[0] || p[1] < origin[1] || p[1] > extent[1]);
 }
 
-bool World::fall() {
-	bool sleep = false;
-	Point sand = {source[0], source[1] + 1};
-	if(cell(sand[0], sand[1]) != AIR)
-		return false;
-	while(!sleep) {
-		if(in_range({sand[0], sand[1]+1})) {
-			if(cell(sand[0], sand[1]+1) == AIR) {
-				sand[1]++;
-			} else {
-				if (in_range({sand[0]-1, sand[1]+1})) {
-					if(cell(sand[0]-1, sand[1]+1) == AIR) {
-						sand = {sand[0]-1, sand[1]+1};
-					} else {
-						if (in_range({sand[0]+1, sand[1]+1})) {
-							if(cell(sand[0]+1, sand[1]+1) == AIR) {
-								sand = {sand[0]+1, sand[1]+1};
-							} else {
-								sleep = true;
-							}
-						} else {
-							return false;
-						}
-					}
-				} else {
-					return false;
-				}
-			}
-		} else {
-			return false;
-		}
-	}
-	cell(sand[0], sand[1]) = SAND;
-	return true;
-}
-
 void World::simulate() {
 	while(fall()) {
 		num_sand++;
 	}
+}
+
+void World::addRocks(const Point& start, const Point& end) {
+	//std::cout << start_point[0] << "," << start_point[1] << " -> "
+	//<< end_point[0] << "," << end_point[1] << std::endl;
+	if(start[0] < end[0]) {
+		for(int x = start[0]; x <= end[0]; x++) {
+			//std::cout << " (" << start_point[1]-origin[1] << "," << x-origin[0] << ")"
+			//<< std::endl;
+			cell(x, start[1]) = ROCK;
+		}
+	} else if (start[0] > end[0]) {
+		for(int x = end[0]; x <= start[0]; x++) {
+			//std::cout << " (" << start_point[1]-origin[1] << "," << x-origin[0] << ")"
+			//<< std::endl;
+			cell(x, start[1]) = ROCK;
+		}
+	}
+	if(start[1] < end[1]) {
+		for(int y = start[1]; y <= end[1]; y++) {
+			//std::cout << " (" << y-origin[1] << "," << start_point[0]-origin[0] << ")"
+			//<< std::endl;
+			cell(start[0], y) = ROCK;
+		}
+	} else if(start[1] > end[1]) {
+		for(int y = end[1]; y <= start[1]; y++) {
+			//std::cout << " (" <<  y-origin[1] << "," << start_point[0]-origin[0] << ")"
+			//<< std::endl;
+			cell(start[0], y) = ROCK;
+		}
+	}
+
 }
 
 void World::load(std::ifstream& input) {
@@ -115,37 +111,8 @@ void World::load(std::ifstream& input) {
 		auto end = line.begin();
 		end++;
 		while(end != line.end()) {
-			Point start_point = *start;
-			Point end_point = *end;
-			//std::cout << start_point[0] << "," << start_point[1] << " -> "
-				//<< end_point[0] << "," << end_point[1] << std::endl;
-			if(start_point[0] < end_point[0]) {
-				for(int x = start_point[0]; x <= end_point[0]; x++) {
-					//std::cout << " (" << start_point[1]-origin[1] << "," << x-origin[0] << ")"
-						//<< std::endl;
-					cell(x, start_point[1]) = ROCK;
-				}
-			} else if (start_point[0] > end_point[0]) {
-				for(int x = end_point[0]; x <= start_point[0]; x++) {
-					//std::cout << " (" << start_point[1]-origin[1] << "," << x-origin[0] << ")"
-						//<< std::endl;
-					cell(x, start_point[1]) = ROCK;
-				}
-			}
-			if(start_point[1] < end_point[1]) {
-				for(int y = start_point[1]; y <= end_point[1]; y++) {
-					//std::cout << " (" << y-origin[1] << "," << start_point[0]-origin[0] << ")"
-						//<< std::endl;
-					cell(start_point[0], y) = ROCK;
-				}
-			} else if(start_point[1] > end_point[1]) {
-				for(int y = end_point[1]; y <= start_point[1]; y++) {
-					//std::cout << " (" <<  y-origin[1] << "," << start_point[0]-origin[0] << ")"
-						//<< std::endl;
-					cell(start_point[0], y) = ROCK;
-				}
-			}
-			
+			addRocks(*start, *end);
+				
 			start++;
 			end++;
 		}
@@ -173,3 +140,109 @@ std::ostream& operator<<(std::ostream& io, const World& w) {
 	}
 	return io;
 }
+
+SimpleWorld::SimpleWorld(std::ifstream& input) {
+	load(input);
+}
+
+bool SimpleWorld::fall() {
+	bool sleep = false;
+	Point sand = {source[0], source[1] + 1};
+	if(cell(sand[0], sand[1]) != AIR)
+		return false;
+	while(!sleep) {
+		if(in_range({sand[0], sand[1]+1})) {
+			if(cell(sand[0], sand[1]+1) == AIR) {
+				sand[1]++;
+			} else {
+				if (in_range({sand[0]-1, sand[1]+1})) {
+					if(cell(sand[0]-1, sand[1]+1) == AIR) {
+						sand = {sand[0]-1, sand[1]+1};
+					} else {
+						if (in_range({sand[0]+1, sand[1]+1})) {
+							if(cell(sand[0]+1, sand[1]+1) == AIR) {
+								sand = {sand[0]+1, sand[1]+1};
+							} else {
+								sleep = true;
+							}
+						} else {
+							return false;
+						}
+					}
+				} else {
+					return false;
+				}
+			}
+		} else {
+			return false;
+		}
+	}
+	cell(sand[0], sand[1]) = SAND;
+	return true;
+}
+
+FullWorld::FullWorld(std::ifstream& input) {
+	load(input);
+	for(int y = 0; y < 2; y++) {
+		_cells.emplace_back(_cells.back().size());
+		for(int x = 0; x < _cells[0].size(); x++) {
+			_cells.back()[x] = AIR;
+		}
+	}
+	addRocks({origin[0], extent[1]+2}, {extent[0], extent[1]+2});
+}
+
+void FullWorld::add_left_columns() {
+	auto end = _cells.end();
+	end--;
+	for(auto it = _cells.begin(); it != end;  it++) {
+		it->insert(it->begin(), column_increment, AIR);
+	}
+	// Floor
+	end->insert(end->begin(), column_increment, ROCK);
+	origin[0]-=column_increment;
+}
+
+void FullWorld::add_right_columns() {
+	auto end = _cells.end();
+	end--;
+	for(auto it = _cells.begin(); it != end;  it++) {
+		it->insert(it->end(), column_increment, AIR);
+	}
+	// Floor
+	end->insert(end->end(), column_increment, ROCK);
+	extent[0]+=column_increment;
+}
+
+bool FullWorld::fall() {
+	bool sleep = false;
+	Point sand = {source[0], source[1]};
+	if(cell(sand[0], sand[1]) == SAND)
+		// Only condition under which the simulation should stop
+		return false;
+	while(!sleep) {
+		// Always in range because of the infinite ROCK floor
+		if(cell(sand[0], sand[1]+1) == AIR) {
+			sand[1]++;
+		} else {
+			if(!in_range({sand[0]-1, sand[1]+1})) {
+				add_left_columns();
+			}
+			if(cell(sand[0]-1, sand[1]+1) == AIR) {
+				sand = {sand[0]-1, sand[1]+1};
+			} else {
+				if (!in_range({sand[0]+1, sand[1]+1})) {
+					add_right_columns();
+				}
+				if(cell(sand[0]+1, sand[1]+1) == AIR) {
+					sand = {sand[0]+1, sand[1]+1};
+				} else {
+					sleep = true;
+				}
+			}
+		}
+	}
+	cell(sand[0], sand[1]) = SAND;
+	return true;
+}
+

@@ -4,7 +4,7 @@
 int main(int argc, char *argv[])
 {
 	auto input = std::ifstream(argv[1]);
-	SimpleWorld world(input);
+	FullWorld world(input);
 
 	std::cout << world << std::endl;
 
