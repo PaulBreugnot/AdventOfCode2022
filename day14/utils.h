@@ -30,23 +30,27 @@ class World {
 
 		void simulate();
 
-		std::size_t numSand() const;
+		virtual std::size_t numSand() const = 0;
 };
 
 class SimpleWorld : public World {
 	public:
 		bool fall() override;
+		std::size_t numSand() const override;
 
 		SimpleWorld(std::ifstream& input);
 };
 
 class FullWorld : public World {
 	private:
-		const std::size_t column_increment = 10;
-		void add_left_columns();
-		void add_right_columns();
+		void add_left_columns(std::size_t count);
+		void add_right_columns(std::size_t count);
+		std::size_t top_left = 0;
+		std::size_t top_right = 0;
+
 	public:
 		bool fall() override;
+		std::size_t numSand() const override;
 
 		FullWorld(std::ifstream& input);
 };

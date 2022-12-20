@@ -13,7 +13,7 @@ const std::vector<std::vector<Cell>>& World::cells() const {
 	return _cells;
 }
 
-std::size_t World::numSand() const {
+std::size_t SimpleWorld::numSand() const {
 	return num_sand;
 }
 
@@ -190,28 +190,31 @@ FullWorld::FullWorld(std::ifstream& input) {
 		}
 	}
 	addRocks({origin[0], extent[1]+2}, {extent[0], extent[1]+2});
+	extent[1]+=2;
+	add_left_columns(1);
+	add_right_columns(1);
 }
 
-void FullWorld::add_left_columns() {
+void FullWorld::add_left_columns(std::size_t count) {
 	auto end = _cells.end();
 	end--;
 	for(auto it = _cells.begin(); it != end;  it++) {
-		it->insert(it->begin(), column_increment, AIR);
+		it->insert(it->begin(), count, AIR);
 	}
 	// Floor
-	end->insert(end->begin(), column_increment, ROCK);
-	origin[0]-=column_increment;
+	end->insert(end->begin(), count, ROCK);
+	origin[0]-=count;
 }
 
-void FullWorld::add_right_columns() {
+void FullWorld::add_right_columns(std::size_t count) {
 	auto end = _cells.end();
 	end--;
 	for(auto it = _cells.begin(); it != end;  it++) {
-		it->insert(it->end(), column_increment, AIR);
+		it->insert(it->end(), count, AIR);
 	}
 	// Floor
-	end->insert(end->end(), column_increment, ROCK);
-	extent[0]+=column_increment;
+	end->insert(end->end(), count, ROCK);
+	extent[0]+=count;
 }
 
 bool FullWorld::fall() {
@@ -226,15 +229,19 @@ bool FullWorld::fall() {
 			sand[1]++;
 		} else {
 			if(!in_range({sand[0]-1, sand[1]+1})) {
-				add_left_columns();
-			}
-			if(cell(sand[0]-1, sand[1]+1) == AIR) {
+				if(cell(sand[0]+1, sand[1]+1) == AIR) {
+					sand = {sand[0]+1, sand[1]+1};
+				} else {
+					top_left++;
+					sleep = true;
+				}
+			} else if(cell(sand[0]-1, sand[1]+1) == AIR) {
 				sand = {sand[0]-1, sand[1]+1};
 			} else {
 				if (!in_range({sand[0]+1, sand[1]+1})) {
-					add_right_columns();
-				}
-				if(cell(sand[0]+1, sand[1]+1) == AIR) {
+					top_right++;
+					sleep = true;
+				} else if(cell(sand[0]+1, sand[1]+1) == AIR) {
 					sand = {sand[0]+1, sand[1]+1};
 				} else {
 					sleep = true;
@@ -246,3 +253,8 @@ bool FullWorld::fall() {
 	return true;
 }
 
+std::size_t FullWorld::numSand() const {
+	return num_sand
+		+ top_left * (top_left-1) /2
+		+ top_right * (top_right-1) /2;
+}
