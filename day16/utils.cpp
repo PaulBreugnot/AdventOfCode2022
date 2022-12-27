@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include <iostream>
 #include <queue>
+#include <limits>
 
 const std::regex valve_regex {
 	"Valve (\\w+) has flow rate=(\\d+); tunnels? leads? to valves? (.*)"
@@ -40,12 +41,57 @@ int Valve::getFlowRate() const {
 	return flow_rate;
 }
 
+void Valve::setShortestPath(const Valve *target, int path_length) {
+	shortest_paths[target] = path_length;
+}
+
+int Valve::getShortestPath(const Valve *target) {
+	return shortest_paths.find(target)->second;
+}
+
 const std::unordered_map<std::string, Valve>& World::getValves() const {
 	return valves;
 }
 
 bool FlowOrdering::operator()(const Valve *v1, const Valve *v2) const {
 	return v1->getFlowRate() < v2->getFlowRate();
+}
+
+void World::allPairsShortestPaths() {
+	for(auto& valve : valves) {
+		for(auto& target : valves) {
+			if(&valve.second == &target.second)
+				valve.second.setShortestPath(&target.second, 0);
+			else
+				valve.second.setShortestPath(&target.second, std::numeric_limits<int>::max());
+		}
+		// k=0
+		for(auto& neighbor : valve.second.getNeighbors())
+			valve.second.setShortestPath(neighbor.target, neighbor.cost);
+	}
+	for(auto& valve : valves) {
+		for(auto& source : valves) {
+			for(auto& target : valves) {
+				int cost1 = source.second.getShortestPath(&valve.second);
+				int cost2 = valve.second.getShortestPath(&target.second);
+				if(cost1 != std::numeric_limits<int>::max()
+						&& cost2 != std::numeric_limits<int>::max()) {
+					int cost = cost1+cost2;
+					if(source.second.getShortestPath(&target.second) > cost) {
+						source.second.setShortestPath(&target.second, cost);
+					}
+				}
+			}
+		}
+	}
+#ifdef LOG
+	for(auto& valve : valves) {
+		std::cout << "Shortest paths from valve " << valve.first << std::endl;
+		for(auto& target : valves) {
+			std::cout << "  to " << target.first << ": " << valve.second.getShortestPath(&target.second) << std::endl;
+		}
+	}
+#endif
 }
 
 void World::parse(std::ifstream& input) {
@@ -62,6 +108,7 @@ void World::parse(std::ifstream& input) {
 		else if(label != "AA")
 			null_valves.insert(&valves[label]);
 		valve_targets.emplace(label, match[3]);
+		num_edges++;
 	}
 	for(auto& item : valve_targets) {
 		auto begin = item.second.begin();
@@ -85,6 +132,8 @@ void World::parse(std::ifstream& input) {
 
 World::World(std::ifstream& input) {
 	parse(input);
+	reduceGraph();
+	allPairsShortestPaths();
 }
 
 void World::reduceGraph() {

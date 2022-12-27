@@ -4,6 +4,8 @@
 #include <unordered_set>
 #include <set>
 
+//#define LOG
+
 class Valve;
 
 struct Edge {
@@ -29,6 +31,7 @@ class Valve {
 		std::string label;
 		int flow_rate;
 		std::unordered_set<Edge, EdgeHash> neighbors;
+		std::unordered_map<const Valve*, int> shortest_paths;
 
 	public:
 		Valve() = default;
@@ -40,6 +43,8 @@ class Valve {
 		const std::unordered_set<Edge, EdgeHash>& getNeighbors() const;
 		std::unordered_set<Edge, EdgeHash>& getNeighbors();
 		int getFlowRate() const;
+		void setShortestPath(const Valve* target, int path_length);
+		int getShortestPath(const Valve* target);
 };
 
 struct FlowOrdering {
@@ -52,8 +57,12 @@ class World {
 		std::unordered_map<std::string, Valve> valves;
 		std::unordered_set<Valve*> null_valves;
 		std::set<const Valve*, FlowOrdering> openable_valves;
+		std::size_t num_edges;
 
 		void parse(std::ifstream& input);
+
+		void allPairsShortestPaths();
+
 	public:
 		World(std::ifstream& input);
 
