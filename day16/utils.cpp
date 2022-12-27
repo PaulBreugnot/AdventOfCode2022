@@ -45,7 +45,7 @@ void Valve::setShortestPath(const Valve *target, int path_length) {
 	shortest_paths[target] = path_length;
 }
 
-int Valve::getShortestPath(const Valve *target) {
+int Valve::getShortestPath(const Valve *target) const {
 	return shortest_paths.find(target)->second;
 }
 
@@ -130,7 +130,8 @@ void World::parse(std::ifstream& input) {
 	}
 }
 
-World::World(std::ifstream& input) {
+World::World(std::ifstream& input, int max_time, int agents_count)
+	: max_time(max_time), agents_count(agents_count){
 	parse(input);
 	reduceGraph();
 	allPairsShortestPaths();
@@ -156,51 +157,63 @@ void World::reduceGraph() {
 	}
 }
 
+struct Agent {
+	const Valve* target;
+};
+
+struct OpenValveEvent {
+	int date;
+	int agent_id;
+
+	OpenValveEvent(int date, int agent_id)
+		: date(date), agent_id(agent_id) {
+		}
+
+	bool operator>(const OpenValveEvent& event) const {
+		return date > event.date;
+	}
+};
+
 struct State {
-	std::unordered_set<const Valve*> open_valves;
-	std::set<const Valve*, FlowOrdering> candidate_valves;
-	const Valve* current_valve;
+	std::vector<Agent> agents;
+	std::priority_queue<
+		OpenValveEvent, std::deque<OpenValveEvent>, std::greater<OpenValveEvent>
+		> events;
+	std::multiset<const Valve*, FlowOrdering> candidate_valves;
 	int score;
 	int time;
 
-	State(const Valve* current_valve, int score, int time)
-		: current_valve(current_valve), score(score), time(time) {
+	State(int agent_count, const Valve* current_valve, int score, int time)
+		: agents(agent_count), score(score), time(time) {
+			for(auto& agent : agents) {
+				agents.back().target = current_valve;
+				events.push({
+						-1, // Trick so that the AA valve is opened even if its
+							// useless so that the exploration actually starts at
+							// time 0
+						0
+						});
+			}
 		}
 
-	void open() {
-		open_valves.insert(current_valve);
-		candidate_valves.erase(current_valve);
-	}
-
-	bool currentValveOpen() const {
-		return open_valves.find(current_valve) != open_valves.end();
-	}
-
-	int upperBound() {
+	int upperBound(int max_time) {
 		int upper_bound = score;
 		int simulated_time = time;
 		auto max_valve = candidate_valves.crbegin();
-		while(time < 30 && max_valve != candidate_valves.crend()) {
-			if(*max_valve != current_valve)
-				// The next date an other valve can start to release pressure
-				simulated_time+=2;
-			else if(!currentValveOpen())
-				// Time to open the current valve
-				simulated_time+=1;
-			else
-				// The current valve is alread opened
-				simulated_time+=2;
+		while(time < max_time && max_valve != candidate_valves.crend()) {
+			// The earliest next date an other valve can start to release pressure
+			simulated_time+=2;
 
-			upper_bound+=(*max_valve)->getFlowRate() * 30-simulated_time;
-			max_valve++;
+			for(std::size_t i = 0; i < agents.size(); i++) {
+				if(max_valve == candidate_valves.crend())
+					break;
+				upper_bound+=(*max_valve)->getFlowRate() * max_time-simulated_time;
+				max_valve++;
+			}
 		}
 		return upper_bound;
 	}
 
-	bool operator==(const State& state) const {
-		return (current_valve->getLabel() == state.current_valve->getLabel())
-			&& open_valves == state.open_valves;
-	}
 	bool operator<(const State& state) const {
 		return score < state.score;
 	}
@@ -210,16 +223,15 @@ struct StateHash {
 	std::size_t operator()(const State& state) const {
 		std::ostringstream str;
 		str << state.time;
-		str << state.current_valve->getLabel();
+		str << state.agents.back().target->getLabel();
 		return std::hash<std::string>()(str.str());
 	}
 };
 
 
 int World::solve() const {
-	std::unordered_set<State, StateHash> explored_states;
 	std::priority_queue<State> open_states;
-	State start = {&valves.find("AA")->second, 0, 0};
+	State start = {agents_count, &valves.find("AA")->second, 0, 0};
 	start.candidate_valves = openable_valves;
 	open_states.push(start);
 
@@ -227,44 +239,34 @@ int World::solve() const {
 	while(!open_states.empty()) {
 		State current_state = open_states.top();
 		open_states.pop();
-		//std::cout << "Explore valve " << current_state.current_valve->getLabel() << " at time " << current_state.time << std::endl;
-		explored_states.insert(current_state);
-		if(current_state.time < 30) {
-			if(current_state.current_valve->getFlowRate() > 0
-					&& current_state.open_valves.find(current_state.current_valve) == current_state.open_valves.end()) {
-				State open_valve_state {current_state};
-				open_valve_state.time = current_state.time+1;
-				open_valve_state.score +=
-					(30-open_valve_state.time) * open_valve_state.current_valve->getFlowRate();
-				open_valve_state.open();
-				//std::cout << "  Open valve " << open_valve_state.current_valve->getLabel() << ": " << open_valve_state.score << std::endl;
-				if(open_valve_state.score > max_score)
-					max_score = open_valve_state.score;
 
-				open_states.push(open_valve_state);
-			}
-			for(const Edge& edge : current_state.current_valve->getNeighbors()) {
-				State next_valve_state {current_state};
-				next_valve_state.current_valve = edge.target;
-				next_valve_state.score = current_state.score; // No score
-															  // increment
-				next_valve_state.time = current_state.time + edge.cost;
-				// Open nothing, go to next valve
-				auto explored_state = explored_states.find(next_valve_state);
-				if(explored_state == explored_states.end()) {
-					if(next_valve_state.upperBound() > max_score)
-						open_states.push(next_valve_state);
-				} else {
-					if(next_valve_state.score > explored_state->score) {
-						if(next_valve_state.upperBound() > max_score) {
-							// Removes the old score
-							explored_states.erase(explored_state);
-							open_states.push(next_valve_state);
-						}
-					}
-				}
-			}
+		OpenValveEvent event = current_state.events.top();
+		current_state.events.pop();
+		
+		current_state.time = event.date+1; // Time to reach the valve + time to
+										   // open
 
+		const Valve* valve_to_open = current_state.agents[event.agent_id].target;
+		current_state.score +=
+			(max_time-current_state.time) * valve_to_open->getFlowRate();
+		//std::cout << "  Open valve " << open_valve_state.current_valve->getLabel() << ": " << open_valve_state.score << std::endl;
+		if(current_state.score > max_score)
+			max_score = current_state.score;
+		for(auto& valve : current_state.candidate_valves) {
+			int shortest_path = valve_to_open->getShortestPath(valve);
+			if(current_state.time + shortest_path + 1 < max_time
+					&& current_state.upperBound(max_time) > max_score) {
+				State next_state = current_state;
+				Agent& agent = next_state.agents[event.agent_id];
+				agent.target = valve;
+
+				next_state.events.push({
+						next_state.time + shortest_path,
+						event.agent_id
+						});
+				next_state.candidate_valves.erase(valve);
+				open_states.push(next_state);
+			}
 		}
 	}
 	return max_score;

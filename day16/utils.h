@@ -44,7 +44,7 @@ class Valve {
 		std::unordered_set<Edge, EdgeHash>& getNeighbors();
 		int getFlowRate() const;
 		void setShortestPath(const Valve* target, int path_length);
-		int getShortestPath(const Valve* target);
+		int getShortestPath(const Valve* target) const;
 };
 
 struct FlowOrdering {
@@ -53,10 +53,12 @@ struct FlowOrdering {
 
 class World {
 	private:
+		int max_time;
+		int agents_count;
 		// Valves go from AA to ZZ so 52 values maximum
 		std::unordered_map<std::string, Valve> valves;
 		std::unordered_set<Valve*> null_valves;
-		std::set<const Valve*, FlowOrdering> openable_valves;
+		std::multiset<const Valve*, FlowOrdering> openable_valves;
 		std::size_t num_edges;
 
 		void parse(std::ifstream& input);
@@ -64,7 +66,7 @@ class World {
 		void allPairsShortestPaths();
 
 	public:
-		World(std::ifstream& input);
+		World(std::ifstream& input, int max_time, int agents_count);
 
 		void reduceGraph();
 
