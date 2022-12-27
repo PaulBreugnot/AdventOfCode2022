@@ -44,6 +44,10 @@ const std::unordered_map<std::string, Valve>& World::getValves() const {
 	return valves;
 }
 
+bool FlowOrdering::operator()(const Valve *v1, const Valve *v2) const {
+	return v1->getFlowRate() < v2->getFlowRate();
+}
+
 void World::parse(std::ifstream& input) {
 	std::unordered_map<std::string, const std::string> valve_targets;
 	std::string line;
@@ -54,9 +58,9 @@ void World::parse(std::ifstream& input) {
 		int flow_rate = std::stoi(match[2]);
 		valves[label] = {label, flow_rate};
 		if(flow_rate > 0)
-			openable_valves.insert(label);
+			openable_valves.insert(&valves[label]);
 		else if(label != "AA")
-			null_valves.insert(label);
+			null_valves.insert(&valves[label]);
 		valve_targets.emplace(label, match[3]);
 	}
 	for(auto& item : valve_targets) {
@@ -84,10 +88,9 @@ World::World(std::ifstream& input) {
 }
 
 void World::reduceGraph() {
-	for(auto& item : null_valves) {
-		Valve* null_valve = &valves[item];
+	for(Valve* null_valve : null_valves) {
 		auto edges_to_delete = null_valve->getNeighbors();
-		std::cout << "Reducing valve " << item << std::endl;
+		std::cout << "Reducing valve " << null_valve->getLabel() << std::endl;
 		for(auto& edge1 : edges_to_delete) {
 			for(auto& edge2 : edges_to_delete) {
 				int cost = edge1.cost+edge2.cost;
@@ -100,12 +103,13 @@ void World::reduceGraph() {
 		for(auto& item : edges_to_delete) {
 			item.target->removeNeighbor({item.target, null_valve, 0});
 		}
-		valves.erase(item);
+		valves.erase(null_valve->getLabel());
 	}
 }
 
 struct State {
-	std::unordered_set<std::string> open_valves;
+	std::unordered_set<const Valve*> open_valves;
+	std::set<const Valve*, FlowOrdering> candidate_valves;
 	const Valve* current_valve;
 	int score;
 	int time;
@@ -115,7 +119,33 @@ struct State {
 		}
 
 	void open() {
-		open_valves.insert(current_valve->getLabel());
+		open_valves.insert(current_valve);
+		candidate_valves.erase(current_valve);
+	}
+
+	bool currentValveOpen() const {
+		return open_valves.find(current_valve) != open_valves.end();
+	}
+
+	int upperBound() {
+		int upper_bound = score;
+		int simulated_time = time;
+		auto max_valve = candidate_valves.crbegin();
+		while(time < 30 && max_valve != candidate_valves.crend()) {
+			if(*max_valve != current_valve)
+				// The next date an other valve can start to release pressure
+				simulated_time+=2;
+			else if(!currentValveOpen())
+				// Time to open the current valve
+				simulated_time+=1;
+			else
+				// The current valve is alread opened
+				simulated_time+=2;
+
+			upper_bound+=(*max_valve)->getFlowRate() * 30-simulated_time;
+			max_valve++;
+		}
+		return upper_bound;
 	}
 
 	bool operator==(const State& state) const {
@@ -141,6 +171,7 @@ int World::solve() const {
 	std::unordered_set<State, StateHash> explored_states;
 	std::priority_queue<State> open_states;
 	State start = {&valves.find("AA")->second, 0, 0};
+	start.candidate_valves = openable_valves;
 	open_states.push(start);
 
 	int max_score = 0;
@@ -151,7 +182,7 @@ int World::solve() const {
 		explored_states.insert(current_state);
 		if(current_state.time < 30) {
 			if(current_state.current_valve->getFlowRate() > 0
-					&& current_state.open_valves.count(current_state.current_valve->getLabel()) == 0) {
+					&& current_state.open_valves.find(current_state.current_valve) == current_state.open_valves.end()) {
 				State open_valve_state {current_state};
 				open_valve_state.time = current_state.time+1;
 				open_valve_state.score +=
@@ -172,12 +203,15 @@ int World::solve() const {
 				// Open nothing, go to next valve
 				auto explored_state = explored_states.find(next_valve_state);
 				if(explored_state == explored_states.end()) {
-					open_states.push(next_valve_state);
+					if(next_valve_state.upperBound() > max_score)
+						open_states.push(next_valve_state);
 				} else {
 					if(next_valve_state.score > explored_state->score) {
-						// Removes the old score
-						explored_states.erase(explored_state);
-						open_states.push(next_valve_state);
+						if(next_valve_state.upperBound() > max_score) {
+							// Removes the old score
+							explored_states.erase(explored_state);
+							open_states.push(next_valve_state);
+						}
 					}
 				}
 			}

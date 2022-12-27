@@ -2,6 +2,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <set>
 
 class Valve;
 
@@ -41,12 +42,16 @@ class Valve {
 		int getFlowRate() const;
 };
 
+struct FlowOrdering {
+	bool operator()(const Valve* v1, const Valve* v2) const;
+};
+
 class World {
 	private:
 		// Valves go from AA to ZZ so 52 values maximum
 		std::unordered_map<std::string, Valve> valves;
-		std::unordered_set<std::string> null_valves;
-		std::unordered_set<std::string> openable_valves;
+		std::unordered_set<Valve*> null_valves;
+		std::set<const Valve*, FlowOrdering> openable_valves;
 
 		void parse(std::ifstream& input);
 	public:
