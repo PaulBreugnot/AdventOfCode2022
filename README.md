@@ -21,7 +21,7 @@ My C++ struggle with the awesome and awful [Advent of Code 2022](https://advento
 | Day 13 | :heavy_check_mark: | :heavy_check_mark: |
 | Day 14 | :heavy_check_mark: | :heavy_check_mark: |
 | Day 15 | :heavy_check_mark: | :heavy_check_mark: |
-| Day 16 | :heavy_check_mark: | :x:                |
+| Day 16 | :heavy_check_mark: | :heavy_check_mark: |
 | Day 17 | :heavy_check_mark: | :x:                |
 | Day 18 | :heavy_check_mark: | :heavy_check_mark: |
 | Day 19 |                    |                    |
